@@ -4,3 +4,10 @@
 
 # LangGraph
 .langgraph_api/
+
+
+# Entornos virtuales
+venv/
+.env/
+.venv/
+env/
