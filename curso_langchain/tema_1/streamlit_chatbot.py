@@ -1,6 +1,6 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 import streamlit as st
 
 # configurar la pagina de la aplicacion
@@ -13,37 +13,54 @@ with st.sidebar:
     temperature = st.slider("Temperatura del modelo", min_value=0.0, max_value=1.0, value=0.5, step=0.1)
     model_name = st.selectbox("Selecciona el modelo", options=["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"])
 
+    personalidad = st.selectbox(
+        "Personalidad del asistente",
+        [
+            "Útil y amigable",
+            "Profesional y formal",
+            "Casual y relajado",
+            "Experto técnico",
+            "Creativo y divertido"
+        ]
+    )
+
     # inicializar el modelo de lenguaje
     chat_model = ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+
+    # mensajes del sistema segun la persoanlidad 
+    system_messages ={
+        "Útil y amigable" : "Eres un asistente util y amigables llamado ChatBot Pro. Responde de manera clara y concisa.",
+        "Profesional y formal": "Eres un asistente profesional y fromal. Proporciona respuestas precisas y bien estructuradas.",
+        "Casual y relajado": "Eres un asistente casual y relajado. Habla de forma natural y amigable, como un buen amigo.",
+        "Experto técnico": "Eres un asistente experto técnico. Proporciona respuestas detalladas con precisión técnica.",
+        "Creativo y divertido": "Eres un asistente creativo y divertido. Usa analogías, ejemplos creativos y mantén un tono alegre."
+    }
+
+    # Chat Prompt template con personalidad dinamica  
+    chat_prompt = ChatPromptTemplate.from_messages([
+        ("system", system_messages[personalidad]),
+        ("human", "Historial de conversación:\n{historial}\n\nPregunta actual: {mensaje}")
+    ])
+
+    # Crear cadena LCEL
+    cadena = chat_prompt | chat_model   
 
 # inicializar el historial de mensajes
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-prompt_template = PromptTemplate(
-    input_variables=["mensaje", "historial"],
-    template="""Eres un asistente útil. Responde a la siguiente pregunta de manera clara y concisa
-    Historial de conversación: {historial}
-    Responde de forma clara y concisa a la siguiente pregunta: {mensaje}"""
-)
-
-# Crear cadena LCEL
-cadena = prompt_template | chat_model
 
 # mostrar mensajes previos
 for msg in st.session_state.messages:
-    if isinstance(msg, SystemMessage):
-        continue
+    if isinstance(msg, HumanMessage):
+            historial_texto += f"Usuario: {msg.content}\n"
+    elif isinstance(msg, AIMessage):
+            historial_texto += f"Asistente: {msg.content}\n"
 
-    role = "assistant" if isinstance(msg, AIMessage) else "user"
-
-    with st.chat_message(role):
-        st.markdown(msg.content)
-
-# Botón para limpiar la conversación
-if st.button("Limpiar conversación"):
-    st.session_state.messages = []
-    st.rerun()
+    # Botón para limpiar la conversación
+    if st.button("Limpiar conversación"):
+        st.session_state.messages = []
+        st.rerun()
 
 # Cuadro de entrada de usuario
 pregunta = st.chat_input("Escribe tu mensaje aquí...")
