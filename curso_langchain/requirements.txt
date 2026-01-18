@@ -10,3 +10,6 @@
 3. Instalacion de dependencias
     - pip install langchain==0.3.* langchain-google-genai streamlit
     - pip install pyPDF2
+    - pip install langchain-community
+    -  pip install pypdf
+    - pip install beautifulsoup4
