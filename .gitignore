@@ -9,6 +9,10 @@
 __pycache__/
 *.pyc
 
+# Ignore environment variable files
+.env
+.env.local
+
 # credentials and secrets
 credentials.json
 token.json
