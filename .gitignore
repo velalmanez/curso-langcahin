@@ -9,6 +9,11 @@
 __pycache__/
 *.pyc
 
+# credentials and secrets
+credentials.json
+token.json
+secrets.json
+
 # Entornos virtuales
 venv/
 .env/
