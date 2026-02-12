@@ -1,7 +1,7 @@
 from langchain_community.vectorstores import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain_classic.retrievers.multi_query import MultiQueryRetriever
 
 
 vector_store = Chroma.from_documents(
