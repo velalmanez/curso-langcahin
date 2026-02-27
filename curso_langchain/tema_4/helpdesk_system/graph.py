@@ -1,9 +1,12 @@
 from typing import TypedDict, Optional, List, Annotated, Dict, Any
 from operator import add
-from langchain_google_genai import GoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from rag_system import VectorRAGSystem
 from config import *
 from langchain_core.prompts import ChatPromptTemplate
+from langgraph.graph import StateGraph, START, END
+import sqlite3
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 class HelpdeskState(TypedDict):
     consulta: str
@@ -22,9 +25,9 @@ class HelpdeskGraph:
     """Grafo del sistema de helpdesk."""
 
     def __init__(self):
-        self.llm = GoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.1)
+        self.llm = ChatGoogleGenerativeAI(model = "gemini-2.5-flash", temperature=0.1)
         self.rag = VectorRAGSystem(chroma_path=CHROMADB_PATH)
-        self.grapgh = None
+        self.graph = None
 
     def procesar_rag(self, state):
         """Busca el contexto de la consulta en el sistema RAG."""
@@ -155,3 +158,85 @@ class HelpdeskGraph:
                 "Respuesta final generada a partir del contexto del RAG"
             ]
         }
+    
+    # funciones de enrutamiento 
+    def decidir_desde_clasificacion(self, state):
+        """Decide hacia donde ir despues de la calsificación con contexto RAG"""
+
+        categoria = state.get("categoria", "escaldo")
+
+        if categoria == "automatico":
+            return "generar_respuesta_final"
+        else:
+            return "escalado"
+        
+    def decidir_desde_humano(self, state):
+        """Decide si continua o esperar respuesta del humano"""
+
+        respuesta_humano = state.get("respuesta_humano", "")
+
+        if respuesta_humano:
+            return "procesar_respuesta_humana"
+        else:
+            return "esperar"
+        
+    def crear_grafo(self):
+        """Crea el grafo del sistema de helpdesk."""
+        graph = StateGraph(HelpdeskGraph)
+
+        # Agregar Nodos
+        graph.add_node("rag", self.procesar_rag)
+        graph.add_node("clasificar", self.clasificar_con_contexto)
+        graph.add_node("escalado", self.preparar_escalado)
+        graph.add_node("respuesta_final", self.generar_respuesta_final)
+        graph.add_node("procesar_humano", self.procesar_respuesta_humana)
+
+        # Definir la estructura del grafo
+        graph.add_edge(START, "rag")
+        graph.add_edge("rag", "clasificar")
+
+        # Edges condicionales 
+        graph.add_conditional_edges(
+            "clasificar", # nodo de origen
+            self.decidir_desde_clasificacion, # función de decisión
+            {
+                "respuesta_final": "respuesta_final",
+                "escalado": "escalado"
+            }
+        )
+        graph.add_conditional_edges(
+            "escalado",
+            self.decidir_desde_humano,
+            {
+                "procesar_humano": "procesar_humano",
+                "esperar": END # pausar ejecucion del grafo hasta que responda el humano
+            }
+        )
+
+        graph.add_edge("procesar_humano", END)
+        graph.add_edge("respuesta_final", END)
+
+        self.graph = graph
+
+        return graph
+    
+    def compilar(self):
+        """Compila el grafo para su ejecución."""
+
+        if not self.graph:
+            self.crear_grafo()
+
+        conn = sqlite3.connect("helpdesk.db", check_same_thread=False)
+
+        checkpointer = SqliteSaver(conn)
+
+        compiled = self.graph.compile(
+            checkpointer=checkpointer,
+            interrupt_before=["procesar_humano"]    
+        )
+
+        return compiled
+
+def crear_helpdesk():
+    helpdesk = HelpdeskGraph()
+    return helpdesk.compilar()
